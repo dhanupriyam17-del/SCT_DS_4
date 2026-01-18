@@ -1,0 +1,102 @@
+from google.colab import files
+import pandas as pd
+import matplotlib.pyplot as plt
+import folium
+from IPython.display import display
+
+uploaded = files.upload()
+file_name = list(uploaded.keys())[0]
+
+df = pd.read_excel(file_name)
+
+# Handle semicolon-separated single-column datasets
+if df.shape[1] == 1:
+    df = df.iloc[:, 0].astype(str).str.split(";", expand=True)
+    df.columns = df.iloc[0]
+    df = df[1:].reset_index(drop=True)
+
+print("Dataset loaded successfully")
+df.head()
+df.columns = df.columns.str.strip().str.replace('"', '', regex=False)
+
+for col in df.columns:
+    if df[col].dtype == object:
+        df[col] = df[col].str.strip().str.replace('"', '', regex=False)
+
+df.info()
+time_cols = [c for c in df.columns if 'time' in c.lower() or 'date' in c.lower()]
+
+if time_cols:
+    time_col = time_cols[0]
+    df[time_col] = pd.to_datetime(df[time_col], errors='coerce')
+    df['Hour'] = df[time_col].dt.hour
+
+    df['Hour'].value_counts().sort_index().plot(kind='bar')
+    plt.xlabel("Hour of Day")
+    plt.ylabel("Number of Accidents")
+    plt.title("Accidents by Time of Day")
+    plt.show()
+else:
+    print("⚠ No time/date column found")
+weather_cols = [c for c in df.columns if 'weather' in c.lower()]
+
+if weather_cols:
+    weather_col = weather_cols[0]
+    df[weather_col].value_counts().plot(kind='bar')
+    plt.xlabel("Weather Condition")
+    plt.ylabel("Number of Accidents")
+    plt.title("Accidents by Weather Condition")
+    plt.show()
+else:
+    print("⚠ No weather column found")
+road_cols = [c for c in df.columns if 'road' in c.lower() or 'surface' in c.lower()]
+
+if road_cols:
+    road_col = road_cols[0]
+    df[road_col].value_counts().plot(kind='bar')
+    plt.xlabel("Road Condition")
+    plt.ylabel("Number of Accidents")
+    plt.title("Accidents by Road Condition")
+    plt.show()
+else:
+    print("⚠ No road condition column found")
+lat_cols = [c for c in df.columns if 'lat' in c.lower()]
+lon_cols = [c for c in df.columns if 'lon' in c.lower()]
+
+if lat_cols and lon_cols:
+    lat_col = lat_cols[0]
+    lon_col = lon_cols[0]
+
+    df[lat_col] = pd.to_numeric(df[lat_col], errors='coerce')
+    df[lon_col] = pd.to_numeric(df[lon_col], errors='coerce')
+
+    df_map = df.dropna(subset=[lat_col, lon_col])
+
+    if not df_map.empty:
+        m = folium.Map(
+            location=[df_map[lat_col].mean(), df_map[lon_col].mean()],
+            zoom_start=10
+        )
+
+        for _, row in df_map.iterrows():
+            folium.CircleMarker(
+                location=[row[lat_col], row[lon_col]],
+                radius=3,
+                fill=True
+            ).add_to(m)
+
+        display(m)
+    else:
+        print("⚠ Location columns exist but contain no valid values")
+else:
+    print("⚠ No latitude/longitude columns found – hotspot map skipped")
+factor_cols = [c for c in df.columns if 'cause' in c.lower() or 'factor' in c.lower()]
+
+if factor_cols:
+    for col in factor_cols:
+        df[col].value_counts().plot(kind='bar')
+        plt.title(f"Accidents by {col}")
+        plt.ylabel("Count")
+        plt.show()
+else:
+    print("⚠ No contributing factor columns found")
